@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Channels;
 
 namespace PulseDeck.Services;
 
@@ -34,50 +35,79 @@ public static class StorageService
     }
 
     public static Task<StorageResult> ScanAsync(StorageDrive drive, IProgress<StorageProgress>? progress, CancellationToken cancellation) =>
-        Task.Run(() => Scan(drive, progress, cancellation), cancellation);
+        ScanParallelAsync(drive, progress, cancellation);
 
-    static StorageResult Scan(StorageDrive drive, IProgress<StorageProgress>? progress, CancellationToken cancellation)
+    static async Task<StorageResult> ScanParallelAsync(StorageDrive drive, IProgress<StorageProgress>? progress, CancellationToken cancellation)
     {
         var largest = new PriorityQueue<StorageEntry, long>();
-        var pending = new Stack<string>(); pending.Push(drive.Root);
-        long visited = 0; int folders = 0;
-        while (pending.Count > 0)
+        var largestLock = new object();
+        var folders = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = false, SingleWriter = false });
+        folders.Writer.TryWrite(drive.Root);
+        long outstanding = 1, visited = 0;
+        int foldersVisited = 0;
+        int workers = Math.Clamp(Environment.ProcessorCount / 2, 2, 6);
+        progress?.Report(new(0, 0));
+
+        async Task WorkerAsync()
         {
-            cancellation.ThrowIfCancellationRequested();
-            string current = pending.Pop(); folders++;
-            try
+            await foreach (string current in folders.Reader.ReadAllAsync(cancellation))
             {
-                foreach (string file in Directory.EnumerateFiles(current))
+                Interlocked.Increment(ref foldersVisited);
+                try
                 {
-                    cancellation.ThrowIfCancellationRequested();
                     try
                     {
-                        var info = new FileInfo(file);
-                        if ((info.Attributes & FileAttributes.ReparsePoint) != 0) continue;
-                        AddTop(largest, new(info.Name, info.FullName, info.Length));
-                        visited++;
+                        foreach (string file in Directory.EnumerateFiles(current))
+                        {
+                            cancellation.ThrowIfCancellationRequested();
+                            try
+                            {
+                                var info = new FileInfo(file);
+                                if ((info.Attributes & FileAttributes.ReparsePoint) == 0)
+                                {
+                                    var entry = new StorageEntry(info.Name, info.FullName, info.Length);
+                                    lock (largestLock) AddTop(largest, entry);
+                                }
+                            }
+                            catch (IOException) { }
+                            catch (UnauthorizedAccessException) { }
+                            long count = Interlocked.Increment(ref visited);
+                            if (count % 2048 == 0) progress?.Report(new(count, Volatile.Read(ref foldersVisited)));
+                        }
                     }
                     catch (IOException) { }
                     catch (UnauthorizedAccessException) { }
-                    if (visited % 4096 == 0) progress?.Report(new(visited, folders));
+
+                    try
+                    {
+                        foreach (string directory in Directory.EnumerateDirectories(current))
+                        {
+                            cancellation.ThrowIfCancellationRequested();
+                            try
+                            {
+                                var info = new DirectoryInfo(directory);
+                                if ((info.Attributes & (FileAttributes.ReparsePoint | FileAttributes.System)) != 0) continue;
+                                Interlocked.Increment(ref outstanding);
+                                if (!folders.Writer.TryWrite(info.FullName)) Interlocked.Decrement(ref outstanding);
+                            }
+                            catch (IOException) { }
+                            catch (UnauthorizedAccessException) { }
+                        }
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
                 }
-                foreach (string directory in Directory.EnumerateDirectories(current))
+                finally
                 {
-                    cancellation.ThrowIfCancellationRequested();
-                    try
-                    {
-                        var info = new DirectoryInfo(directory);
-                        if ((info.Attributes & (FileAttributes.ReparsePoint | FileAttributes.System)) == 0) pending.Push(info.FullName);
-                    }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
+                    if (Interlocked.Decrement(ref outstanding) == 0) folders.Writer.TryComplete();
                 }
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
         }
+
+        try { await Task.WhenAll(Enumerable.Range(0, workers).Select(_ => Task.Run(WorkerAsync, cancellation))); }
+        catch (OperationCanceledException) { folders.Writer.TryComplete(); throw; }
         cancellation.ThrowIfCancellationRequested();
-        progress?.Report(new(visited, folders));
+        progress?.Report(new(Volatile.Read(ref visited), Volatile.Read(ref foldersVisited)));
         return new(drive, largest.UnorderedItems.Select(x => x.Element).OrderByDescending(x => x.Bytes).ToArray(), ReadLargestApplications());
     }
 

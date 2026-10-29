@@ -38,8 +38,8 @@ public partial class MainWindow
         var token = storageCancellation.Token;
         StorageScanButton.IsEnabled = false; StorageCancelButton.IsEnabled = true;
         StorageChart.ItemsSource = null; storageResult = null; StorageOpenButton.IsEnabled = false;
-        StorageEmptyText.Text = "Analisando arquivos e aplicativos desta unidade…";
-        StorageStatusText.Text = "Preparando a análise…";
+        StorageEmptyText.Text = "Analisando arquivos e aplicativos desta unidade em paralelo…";
+        StorageStatusText.Text = "Iniciando busca paralela…";
         try
         {
             var progress = new Progress<StorageProgress>(value =>
