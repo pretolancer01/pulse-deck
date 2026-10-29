@@ -1,10 +1,16 @@
 # PulseDeck
 
+## ⬇️ BAIXAR PULSEDECK PARA WINDOWS
+
+### [CLIQUE AQUI PARA BAIXAR O EXE](https://github.com/pretolancer01/pulse-deck/releases/download/v0.5.2/PulseDeck-0.5.2-win-x64.exe)
+
+**Download direto:** `PulseDeck-0.5.2-win-x64.exe` · Windows x64 · não precisa instalar o .NET.
+
 Aplicativo nativo de monitoramento e ajustes para Windows x64, criado em C# / WPF / .NET 10.
 
 ## Baixar e usar
 
-Baixe `PulseDeck.exe` em **Releases** e execute-o. O runtime .NET está incluído. Ao clicar no X, a janela vai para os ícones ocultos e o monitoramento continua; clique duas vezes no ícone para reabrir ou use **Sair do PulseDeck** no menu do ícone para encerrar e restaurar os ajustes da sessão.
+Baixe o EXE pelo link acima e execute-o. O runtime .NET está incluído. Ao clicar no X, a janela vai para os ícones ocultos e o monitoramento continua; clique duas vezes no ícone para reabrir ou use **Sair do PulseDeck** no menu do ícone para encerrar e restaurar os ajustes da sessão.
 
 O Windows pode exibir um aviso porque o executável ainda não é assinado. Examine o código e compile por conta própria se preferir. O aplicativo lê os sensores disponíveis em cada máquina; valores e controles ausentes ficam indisponíveis.
 
