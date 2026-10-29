@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings><Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest><Version>0.5.2</Version>
+    <ApplicationIcon>Assets/PulseDeck.ico</ApplicationIcon>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier><PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>PulseDeck</AssemblyName><RootNamespace>PulseDeck</RootNamespace>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup><PackageReference Include="System.Management" Version="10.0.2" /><PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" /></ItemGroup>
+  <ItemGroup><Resource Include="Assets/PulseDeck.ico" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Native/PulseDeckRyzenBridge.dll" LogicalName="PulseDeck.Native.PulseDeckRyzenBridge.dll" /></ItemGroup>
+</Project>
