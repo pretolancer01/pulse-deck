@@ -78,10 +78,13 @@ public partial class MainWindow
             return;
         }
         long largest = entries.Max(item => item.Bytes);
-        StorageChart.ItemsSource = entries.Select(item => new StorageChartItem(
-            item, item.Name, FormatStorageBytes(item.Bytes), item.Path,
-            largest > 0 ? Math.Max(1, item.Bytes * 100.0 / largest) : 0,
-            File.Exists(item.Path) || Directory.Exists(item.Path))).ToArray();
+        StorageChart.ItemsSource = entries.Select(item =>
+        {
+            bool canOpen = !string.IsNullOrWhiteSpace(item.Path) && (File.Exists(item.Path) || Directory.Exists(item.Path));
+            string location = canOpen ? item.Path : "Localização não informada pelo Windows";
+            return new StorageChartItem(item, item.Name, FormatStorageBytes(item.Bytes), location,
+                largest > 0 ? Math.Max(1, item.Bytes * 100.0 / largest) : 0, canOpen);
+        }).ToArray();
         StorageEmptyText.Text = "Barras proporcionais ao maior item da lista. Selecione um item para abrir sua localização.";
     }
 
@@ -93,11 +96,22 @@ public partial class MainWindow
         if (StorageChart.SelectedItem is not StorageChartItem item) return;
         try
         {
-            var start = new ProcessStartInfo("explorer.exe") { UseShellExecute = true };
-            if (File.Exists(item.Entry.Path)) start.Arguments = "/select,\"" + item.Entry.Path + "\"";
-            else if (Directory.Exists(item.Entry.Path)) start.Arguments = "\"" + item.Entry.Path + "\"";
+            if (File.Exists(item.Entry.Path))
+            {
+                var start = new ProcessStartInfo("explorer.exe")
+                {
+                    Arguments = "/select, \"" + item.Entry.Path + "\"",
+                    UseShellExecute = true
+                };
+                Process.Start(start);
+                StorageStatusText.Text = "Arquivo selecionado no Explorador.";
+            }
+            else if (Directory.Exists(item.Entry.Path))
+            {
+                Process.Start(new ProcessStartInfo(item.Entry.Path) { UseShellExecute = true });
+                StorageStatusText.Text = "Pasta aberta no Explorador.";
+            }
             else { StorageStatusText.Text = "O local desse aplicativo não foi informado pelo Windows."; return; }
-            Process.Start(start);
         }
         catch (Exception ex) { StorageStatusText.Text = "Não foi possível abrir o local: " + ex.Message; }
     }

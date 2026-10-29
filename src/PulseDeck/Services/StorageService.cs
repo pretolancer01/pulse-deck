@@ -138,8 +138,10 @@ public static class StorageService
                         string? name = sub?.GetValue("DisplayName") as string;
                         if (string.IsNullOrWhiteSpace(name)) continue;
                         if (!long.TryParse(sub?.GetValue("EstimatedSize")?.ToString(), out long kilobytes) || kilobytes <= 0) continue;
-                        string? install = sub?.GetValue("InstallLocation") as string;
-                        string path = !string.IsNullOrWhiteSpace(install) ? install : subName;
+                        string path = FindApplicationPath(
+                            sub?.GetValue("InstallLocation") as string,
+                            sub?.GetValue("DisplayIcon") as string,
+                            sub?.GetValue("UninstallString") as string) ?? "";
                         long bytes = kilobytes > long.MaxValue / 1024 ? long.MaxValue : kilobytes * 1024;
                         entries[name.Trim()] = new(name.Trim(), path, bytes);
                     }
@@ -152,5 +154,40 @@ public static class StorageService
             catch (UnauthorizedAccessException) { }
         }
         return entries.Values.OrderByDescending(x => x.Bytes).Take(Limit).ToArray();
+    }
+
+    static string? FindApplicationPath(string? install, string? displayIcon, string? uninstall)
+    {
+        if (!string.IsNullOrWhiteSpace(install))
+        {
+            string expanded = Environment.ExpandEnvironmentVariables(install.Trim().Trim('"'));
+            if (Directory.Exists(expanded)) return expanded;
+            if (File.Exists(expanded)) return expanded;
+        }
+        foreach (string? command in new[] { displayIcon, uninstall })
+        {
+            string? executable = GetExecutablePath(command);
+            if (executable != null) return executable;
+        }
+        return null;
+    }
+
+    static string? GetExecutablePath(string? command)
+    {
+        if (string.IsNullOrWhiteSpace(command)) return null;
+        string value = Environment.ExpandEnvironmentVariables(command.Trim());
+        string? path = null;
+        if (value.StartsWith('"'))
+        {
+            int end = value.IndexOf('"', 1);
+            if (end > 1) path = value[1..end];
+        }
+        else
+        {
+            int exe = value.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+            if (exe >= 0) path = value[..(exe + 4)].Trim();
+        }
+        if (path == null || !File.Exists(path)) return null;
+        return path;
     }
 }
