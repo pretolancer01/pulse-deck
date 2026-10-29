@@ -22,7 +22,7 @@ public partial class App : System.Windows.Application
                 using var cpuTemperature = new CpuTemperatureService(); cpuTemperature.Initialize();
                 var metrics = new WindowsMetrics().Read();
                 var report = new {
-                    At = DateTimeOffset.Now, Version = "0.5.2", Mode = "Read-only: no clocks/fans changed",
+                    At = DateTimeOffset.Now, Version = "0.5.3", Mode = "Read-only: no clocks/fans changed",
                     Cpu = WindowsMetrics.Query("SELECT Name,MaxClockSpeed,CurrentClockSpeed FROM Win32_Processor"),
                     Board = WindowsMetrics.Query("SELECT Manufacturer,Product,Version FROM Win32_BaseBoard"),
                     WindowsFans = WindowsMetrics.Query("SELECT Name,DeviceID,DesiredSpeed FROM Win32_Fan"),

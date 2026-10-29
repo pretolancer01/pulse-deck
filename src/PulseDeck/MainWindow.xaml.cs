@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -30,6 +31,9 @@ public partial class MainWindow : Window
     bool paused, ticking, closing, deleting, gpuChanged, checking;
     bool exitRequested;
     System.Windows.Forms.NotifyIcon? trayIcon;
+    CancellationTokenSource? storageCancellation;
+    StorageResult? storageResult;
+    sealed record StorageChartItem(StorageEntry Entry, string Name, string SizeLabel, string LocationLabel, double BarPercent, bool CanOpen);
     List<ProcessRow> processes = new();
     List<TempRow> tempRows = new();
     List<FanPoint>? originalCurve;
@@ -40,7 +44,7 @@ public partial class MainWindow : Window
     FanProfile selectedFanProfile = FanProfile.Normal;
     IInputElement? focusBeforeCommands;
     sealed record NavigationEntry(string Title, int Tab);
-    readonly NavigationEntry[] navigationEntries = [new("Visão geral", 0), new("Ventoinhas da GPU", 1), new("Overclock e ajustes da GPU", 2), new("Arquivos temporários", 3), new("Otimização do Windows", 4), new("Overlay", 5), new("Sistema e diagnóstico", 6)];
+    readonly NavigationEntry[] navigationEntries = [new("Visão geral", 0), new("Ventoinhas da GPU", 1), new("Overclock e ajustes da GPU", 2), new("Arquivos temporários", 3), new("Armazenamento", 4), new("Otimização do Windows", 5), new("Overlay", 6), new("Sistema e diagnóstico", 7)];
     CancellationTokenSource? scanCancellation;
     string diagnostic = "", cpuName = "Processador não identificado", boardName = "Placa-mãe não identificada";
     GpuMetrics lastGpu = new(null, null, null, null, null, null);
@@ -48,6 +52,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         InitializeTray();
+        InitializeStorageDrives();
         SourceInitialized += (_, _) => NativeChrome.Attach(this);
         StateChanged += (_, _) => MaximizeButton.Content = WindowState == WindowState.Maximized ? "❐" : "□";
         ConfigureKeyboard();
@@ -108,7 +113,7 @@ public partial class MainWindow : Window
         ApplyBoardButton.IsEnabled = board.ControlIds.Count > 0;
         BoardActions.Visibility = board.ControlIds.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         BoardControls.Visibility = board.Sensors.Any(s => s.Type is "Fan" or "Control") ? Visibility.Visible : Visibility.Collapsed;
-        diagnostic = $"PulseDeck 0.5.2 • C# / WPF / .NET 10 x64\nVerificação: {DateTimeOffset.Now:dd/MM/yyyy HH:mm:ss zzz}\n\nCPU: {cpuName}\nPlaca-mãe: {boardName}\n\nGPU: {gpu.Name}\n{gpu.DriverVersion}\n{gpu.Status}\nVRAM total: {(gpu.VramMb > 0 ? gpu.VramMb + " MB (ADLX)" : "indisponível")}\nCurva GPU: {gpu.FanSupported}\nClock manual compatível: {gpu.ClockSupported}\nAuto-overclock reportado: {gpu.AutoOverclockSupported}\n\nCPU/gabinete: {board.Status}\nDriver PawnIO instalado: {board.DriverPresent}\nSessão elevada: {BoardService.IsAdmin}\nCanais expostos: {board.ControlIds.Count}\n\nOverclock CPU: sem backend documentado de escrita integrado. SDK público Ryzen Master Monitoring é de leitura.\n\nO diagnóstico não altera clocks nem ventilação.";
+        diagnostic = $"PulseDeck 0.5.3 • C# / WPF / .NET 10 x64\nVerificação: {DateTimeOffset.Now:dd/MM/yyyy HH:mm:ss zzz}\n\nCPU: {cpuName}\nPlaca-mãe: {boardName}\n\nGPU: {gpu.Name}\n{gpu.DriverVersion}\n{gpu.Status}\nVRAM total: {(gpu.VramMb > 0 ? gpu.VramMb + " MB (ADLX)" : "indisponível")}\nCurva GPU: {gpu.FanSupported}\nClock manual compatível: {gpu.ClockSupported}\nAuto-overclock reportado: {gpu.AutoOverclockSupported}\n\nCPU/gabinete: {board.Status}\nDriver PawnIO instalado: {board.DriverPresent}\nSessão elevada: {BoardService.IsAdmin}\nCanais expostos: {board.ControlIds.Count}\n\nOverclock CPU: sem backend documentado de escrita integrado. SDK público Ryzen Master Monitoring é de leitura.\n\nO diagnóstico não altera clocks nem ventilação.";
         DiagnosticLabel.Text = diagnostic;
     }
     async Task Tick()
@@ -397,7 +402,7 @@ public partial class MainWindow : Window
         if (deleting) { e.Cancel = true; MessageBox.Show(this, "Aguarde o término do envio à Lixeira antes de fechar."); return; }
         try { UndoGpu(); board.Restore(); }
         catch (Exception ex) { e.Cancel = true; MessageBox.Show(this, "Não foi possível restaurar os ajustes: " + ex.Message + "\nA janela permanecerá aberta para permitir nova tentativa.", "Restauração pendente"); return; }
-        closing = true; timer.Stop(); scanCancellation?.Cancel();
+        closing = true; timer.Stop(); scanCancellation?.Cancel(); storageCancellation?.Cancel();
     }
     void InitializeTray()
     {

@@ -15,6 +15,7 @@ O Windows pode exibir um aviso porque o executável ainda não é assinado. Exam
 ## Recursos
 
 - Painel com métricas de CPU, GPU, RAM e processos, histórico animado e gráfico 3D interativo por aplicativo.
+- Análise de armazenamento sob demanda, com gráfico dos maiores arquivos e aplicativos e acesso ao local quando informado pelo Windows.
 - Perfis de ventoinha da GPU quando o driver AMD ADLX expõe o controle; sensores da placa-mãe aparecem quando detectados.
 - Ajustes de frequência da GPU apenas nos limites informados pelo driver, com confirmação, supervisão térmica e restauração ao sair.
 - Presets reversíveis de preferências do Windows, com opção **Padrão do Windows** e restauração da configuração anterior.
